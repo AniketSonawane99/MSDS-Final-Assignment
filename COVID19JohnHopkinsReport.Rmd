@@ -1,0 +1,76 @@
+---
+title: "COVID-19 Data Report"
+output: html_document
+date: "2023-08-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+
+```
+
+## Importing Data
+
+```{r}
+us_cases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
+global_cases<- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+us_deaths<-read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv")
+global_deaths<- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+```
+
+## Summary
+The data imported above shows the COVID-19 cases globally and in the USA. Each row contains a particular city in a particular state and how many cases are there as each day passes. The exact location of the area is also given for any spatial analyses
+
+## Visualization and Analyses
+
+The first Visualization will show the top 5 countries where most number of deaths have occurred in the world
+
+```{r}
+gdcopy <- global_deaths
+gdcopy <- subset(gdcopy, select = -c(Lat,Long))
+gdcopy$TotalDeaths <- rowSums(gdcopy[, -(1:2)])
+total_deathsglobal <- gdcopy[,c("Country/Region", "TotalDeaths")]
+total_deathsglobal <- total_deathsglobal %>% rename('Country_Region' = 'Country/Region')
+total_deathsglobal <- aggregate(TotalDeaths ~ Country_Region, data = total_deathsglobal, FUN = sum)
+total_deathsglobal <- total_deathsglobal[total_deathsglobal$Country_Region != '$Olympics',]
+ggplot(total_deathsglobal[order(-total_deathsglobal$TotalDeaths),][1:10,],aes(x = Country_Region, y = TotalDeaths)) + geom_bar(stat = 'identity') + labs(x = "Countries", y = 'Total Deaths')
+
+```
+
+According to this bar graph the most amount of deaths occured in the USA. A source of bias here could be that the USA also has the highest number of reported cases. Countries over the world might have more cases but these are not reported therefore skewing the data towards more developed countries with more census of the population. Also the number of cases can depend on the population of the country and their medical resources
+
+The second visualization will show the trend in number of cases over the years for different cities in the USA
+
+```{r}
+uscasecopy <- subset(us_cases, select = -c(UID,iso2, iso3, code3, FIPS, Admin2,Country_Region, Lat, Long_, Combined_Key))
+uscasecopy <- uscasecopy %>% pivot_longer(cols = -Province_State, names_to = "Date", values_to = "Cases") %>% mutate(Date = as.Date(Date, format = '%m/%d/%y'))
+uscasecopy <- uscasecopy %>% group_by(Province_State, Date) %>% summarize(TotalCases = sum(Cases))
+ggplot(uscasecopy ,aes(x = Date, y = TotalCases, color = Province_State)) + geom_line() + theme_minimal() + theme(legend.position = 'top') + labs(x = "Years", Y = "Number of Cases") 
+
+```
+
+The visualization shows a clear upwards trend with places like California increasing in number of cases significantly faster and higher than anyone else. However the increase is not exponential but rather it slowly increases as the years go, with tiny jumps in the middle. These 'jumps' could be due to the fact that since the year starts in Winter for many countries in the world, the chance of the virus spreading is higher as they can stay alive for longer in the environment and people are already more likely to be sick from the cold so immunity is low.
+
+
+
+## Model
+The model will be a linear model showing the effect of population on deaths per million in the US by state. It will attempt to answer the question of whether a large population means that not only more cases occur, but more deaths as well. As cities with higher population tend to have better medical resources than places with little population therefore the amount of cases might be higher but the amount of death caused by the virus could be lower.
+
+```{r}
+uscasecopy2 <- us_cases %>% pivot_longer(cols = -(UID:Combined_Key), names_to = "date", values_to = "cases") %>% select(Admin2:cases) %>% mutate(date = mdy(date)) %>% select(-c(Lat, Long_))
+usdeathcopy <- us_deaths %>% pivot_longer(cols = -(UID:Population), names_to = "date", values_to = "deaths") %>% select(Admin2:deaths)%>%mutate(date = mdy(date)) %>% select(-c(Lat,Long_))
+US <- uscasecopy2 %>% full_join(usdeathcopy)
+US_by_state <- US %>% group_by(Province_State,Country_Region,date) %>% summarize(cases = sum(cases), deaths = sum(deaths), Population = sum(Population)) %>% mutate(deaths_per_mill = deaths*1000000/Population) %>% select(Province_State, Country_Region, date, cases, deaths, deaths_per_mill, Population) %>% ungroup()
+US_by_state$deaths_per_mill[US_by_state$deaths_per_mill == Inf] <- 0
+mod<- lm(deaths_per_mill ~ Population, data = US_by_state)
+summary(mod)
+```
+The model shows a high value for an Estimate and T-value indicating that population does have an significant impact on the deaths per million indicating that bigger crowds makes the pandemic more lethal. A bias in this model is that it does not account for size of the area in which the population resides. A bigger place can have a population that is bigger but more spread out which impacts the spread of the virus and how many people it can kill, whereas a smaller more crowded place can be worse even though there are lesser people 
+
+## Conclusion
+In conclusion, the report analysed and produced a bar graph to rank the top 5 countries with the most number of cases in which the US came first. Then a line graph was made to show the trend in the amount of cases over time for each state in the US. California was ahead of everyone else significantly. Lastly, a linear model was made, showing the effect of population on the deaths per million caused by the virus and the model showed that Population had a significant impact on the death per millions caused by the virus. However all these analytics had biases which were discussed with the respective analysis.

@@ -1,0 +1,89 @@
+---
+title: "NYPD Shooting Incident Data Report"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This report will analyse and show a visualization based on the NYPD Shooting Incident Data available on the Federal Database Website 
+
+The Question we will be asking today is Who do you have to be to get shot according to this data? Also we will be pointing out the obvious systemic racism present throughout this data. According to the website, prior to uploading, the data was reviewed by a department, therefore the "unknowns" or empty or null will not be cleaned up or be put into one category because the assumption can be made that the way the value is labelled has a certain meaning that it carries. However, it is ensured that they play no impact in any statistical models done in the report and are only present in general analysis. 
+
+We begin with summarizing the data that is imported through Rstudio
+```{r, include=FALSE}
+install.packages('tidyverse')
+library(tidyverse)
+NYPD_Shooting_Incident_Data__Historic_<-read_csv('https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD')
+```
+## Summary
+
+```{r}
+summary(NYPD_Shooting_Incident_Data__Historic_)
+```
+Through the summary we see that the dataset shows various shootings (27312 shootings to be precise) and gives information wherever possible about the location of the shooting, race and sex of the perpetrator and victim and the date and time of the shooting 
+
+## Visualization 
+
+Through a bar graph we can see the different races of the victims and through this data we observe that the victim is significantly most likely to be black
+```{r}
+ggplot(NYPD_Shooting_Incident_Data__Historic_, aes(x = VIC_RACE)) + geom_bar() + labs(x = "Race of Victim" , y = "Number of Incidents") +
+scale_x_discrete(guide = guide_axis(n.dodge=2))
+
+```
+```{r}
+ggplot(NYPD_Shooting_Incident_Data__Historic_, aes(x = PERP_RACE)) + geom_bar() + labs(x = "Race of Perpetrator", y = "Incidents of Shooting") +
+scale_x_discrete(guide = guide_axis(n.dodge=3))
+```
+And through another bar graph we can see that the perpetrator is interestingly always either black or "unknown", through this, it seems that historically it is very likely the cops only caught a murderer of a certain race or they managed to escape them.
+
+```{r}
+ggplot(NYPD_Shooting_Incident_Data__Historic_, aes(x = VIC_SEX)) + geom_bar() + labs(x = 'Sex of Victim', y = 'Incidences of Shooting')
+```
+Then we consider the differences in sex. As we can see men are more likely to be shot than women 
+
+```{r}
+ggplot(NYPD_Shooting_Incident_Data__Historic_ , aes(x = PERP_SEX)) + geom_bar() + labs(x = 'Sex of the Perpetrator', y = 'Incidences of Shooting')
+```
+And then we look at the sex of the perpetrators of the crime. We find that the perpetrators are also more likely to be male or not caught than being a woman. 
+
+## Bias and Analysis 
+Therefore, we can see an interesting trend in the cases of sex and race, the perpetrator is more likely to be either of a certain race or sex or not caught at all which is the "unknown" or "null" label, than be of any other race or sex. This shows an attention on a particular "type" of perpetrator always caught. An argument could be made that this "type" of people are more likely to be caught because this "type" of person does most of the crime but that does not explain the vast differences seen in the other races or sex as they also inhabit a large portion of the population in New York.You could say that shootings are more likely to be 'solved' in the NYPD when there is a black perpetrator. This is the main and most significant bias (racism) in this dataset and makes any statistical test or model conducted based on his data biased as well. 
+
+## Model
+```{r}
+ggplot(NYPD_Shooting_Incident_Data__Historic_ , aes(x = BORO)) + geom_bar() + labs(x = 'Boroughs' , y = 'Incidences of Shootings')
+```
+For the model we first look at the borough or area where these shootings most took place
+
+
+Using this data we can create a model using generalized logistic regression to see whether the likelihood of the victim being black is dependent on the location of the shooting. Once again, for reasons mentioned above, it is safe to assume the data is biased and therefore there is reason to assume the model is biased. 
+
+Firstly we create a copy of the original dataset so that any changes to the dataset do not affect the original data. 
+
+```{r}
+shooting_data_copy <- NYPD_Shooting_Incident_Data__Historic_
+```
+
+Then, we create a column with values of either 1 if the victim was black or 0 if they were not.This makes the calculation simpler as we are focusing on this particular category and makes logistic regression possible. 
+
+```{r}
+shooting_data_copy <- shooting_data_copy %>% mutate(is_black = ifelse(VIC_RACE == "BLACK", 1, 0))
+```
+
+Next we create the model 
+```{r}
+logisitc_model <- glm(is_black ~ BORO, data = shooting_data_copy, family = binomial )
+```
+
+Once the model is created we can look at the results 
+
+```{r}
+summary(logisitc_model)
+```
+Through the coefficients of the model we can see that in places like Brooklyn, Queens and Staten Island there is a higher likelihood of the victim being black because Estimate and z value is high.
+
+## Conclusion
+In conclusion, the data is biased as we can see that there is a disproportionate chance that the perpetrator is of a certain race or sex, thereby reinforcing the idea that stereotypes have affected the context of data. Through the biased data and model, we see that in certain places there is a higher likelihood of a victim being black
